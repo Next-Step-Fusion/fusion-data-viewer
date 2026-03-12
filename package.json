@@ -1,0 +1,24 @@
+{
+  "name": "fusion-data-viewer",
+  "version": "0.1.0",
+  "description": "Browser-based HDF5 file viewer and data visualization tool for fusion research",
+  "type": "module",
+  "author": "keyhell",
+  "license": "SEE LICENSE IN README",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Next-Step-Fusion/fusion-data-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Next-Step-Fusion/fusion-data-viewer/issues"
+  },
+  "homepage": "https://github.com/Next-Step-Fusion/fusion-data-viewer#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/bump-version.mjs",
+    "prepare": "git config core.hooksPath .githooks",
+    "test": "node tests/tree.test.mjs"
+  }
+}

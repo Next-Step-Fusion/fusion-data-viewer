@@ -1,0 +1,34 @@
+node_modules/
+
+# OS
+.DS_Store
+._*
+
+# IDE
+.vscode/
+.idea/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+
+# Windows
+Thumbs.db
+
+# Vim
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+
+# Claude agent state
+.claude/

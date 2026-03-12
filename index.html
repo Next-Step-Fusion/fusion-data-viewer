@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fusion Data Viewer</title>
+    <meta name="description" content="Fusion Data Viewer MVP shell" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/fdv-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/fdv-32x32.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="/icons/fdv-192x192.png"
+    />
+    <link rel="apple-touch-icon" href="/icons/fdv-192x192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <main class="main-layout" aria-label="Fusion Data Viewer workspace">
+        <aside id="tree-view" class="tree-view" aria-label="Tree view">
+          <div class="tree-view-header">
+            <div class="tree-view-header-top">
+              <div class="file-actions">
+                <button id="file-open" class="button button-primary" type="button" title="Open a local HDF5 file. Alternatively, load a remote file via URL: ?file=&lt;url&gt;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 19l2.757 -7.351a1 1 0 0 1 .936 -.649h12.307a1 1 0 0 1 .986 1.164l-.996 5.211a2 2 0 0 1 -1.964 1.625h-14.026a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h4l3 3h7a2 2 0 0 1 2 2v2" /></svg>
+                  Open HDF5
+                </button>
+                <button class="button-icon" type="button" popovertarget="about-popover" aria-label="About Fusion Data Viewer" title="About">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg>
+                </button>
+                <div id="about-popover" class="about-popover" popover>
+                  <p>This application was originally developed by Alexei '<a href="https://github.com/keyhell" target="_blank" rel="noopener noreferrer">keyhell</a>' Zhurba from the <a href="https://nextfusion.org/" target="_blank" rel="noopener noreferrer">Next Step Fusion</a> team. The source code is available on <a href="https://github.com/Next-Step-Fusion/fusion-data-viewer" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+                </div>
+                <div id="data-error" class="error file-error" role="alert" hidden></div>
+                <input
+                  id="file-input"
+                  class="file-input"
+                  type="file"
+                  accept=".h5,.hdf5,.hdf"
+                  aria-label="Open HDF5"
+                />
+              </div>
+            </div>
+            <label class="tree-filter">
+              <span class="sr-only">Filter tree</span>
+              <input
+                id="tree-filter"
+                type="search"
+                placeholder="Filter nodes by name or path"
+              />
+            </label>
+          </div>
+          <p id="tree-status" class="muted"></p>
+          <div class="tree-container" role="tree" aria-label="HDF5 tree">
+            <ul id="tree-root" class="tree"></ul>
+          </div>
+          <p class="tree-footer">
+            Fusion Data Viewer <span id="app-version"></span>
+          </p>
+        </aside>
+        <section class="data-view" aria-label="Data view">
+          <div class="data-view-header">
+            <div class="data-view-header-top">
+              <div class="tabs" role="tablist" aria-label="Data view tabs">
+                <button
+                  class="tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  data-tab="dataset"
+                  hidden
+                >
+                  Dataset
+                </button>
+              </div>
+              <button
+                id="tree-toggle"
+                class="tree-collapse-toggle"
+                type="button"
+                aria-controls="tree-view"
+                aria-expanded="true"
+                aria-label="Toggle tree view"
+                title="Toggle tree panel"
+                hidden
+              ><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M15 6l-6 6l6 6" /></svg></button>
+            </div>
+            <div class="data-view-controls-row">
+              <div class="viewer-tabs" role="tablist" aria-label="Dataset views" hidden>
+                <button
+                  class="viewer-tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  data-view="info"
+                  title="Info"
+                ><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg></button>
+                <button
+                  class="viewer-tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  data-view="raw"
+                  title="Data"
+                ><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 6a8 3 0 1 0 16 0a8 3 0 1 0 -16 0" /><path d="M4 6v6a8 3 0 0 0 16 0v-6" /><path d="M4 12v6a8 3 0 0 0 16 0v-6" /></svg></button>
+                <button
+                  class="viewer-tab-button"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  data-view="plot"
+                  title="Plot"
+                ><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 19l16 0" /><path d="M4 15l4 -6l4 2l4 -5l4 4" /></svg></button>
+              </div>
+              <div id="plot-controls-slot" hidden></div>
+            </div>
+            <p id="data-meta" class="meta-row data-meta" hidden></p>
+            <div id="slice-controls" class="meta-row slice-controls" hidden></div>
+          </div>
+          <div class="tab-panel" role="tabpanel" data-panel="dataset">
+            <div class="view-panel" role="tabpanel" data-view-panel="raw">
+              <div id="raw-panel" class="panel-content"></div>
+            </div>
+            <div class="view-panel" role="tabpanel" data-view-panel="plot" hidden>
+              <div id="plot-panel" class="panel-content"></div>
+            </div>
+            <div class="view-panel" role="tabpanel" data-view-panel="info" hidden>
+              <div id="info-panel" class="panel-content"></div>
+            </div>
+          </div>
+          <div id="dashboard-panels"></div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

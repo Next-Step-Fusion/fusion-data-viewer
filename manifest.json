@@ -1,0 +1,30 @@
+{
+  "name": "Fusion Data Viewer",
+  "short_name": "Fusion Viewer",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2d3870",
+  "icons": [
+    {
+      "src": "/icons/fdv-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/fdv-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/fdv-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/fdv-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
