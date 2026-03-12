@@ -2,6 +2,8 @@
 
 Fusion Data Viewer is an open and flexible tool for browsing HDF5 files and building customizable dashboards. This application was originally developed by Alexei '[keyhell](https://github.com/keyhell)' Zhurba from the [Next Step Fusion](https://nextfusion.org) team.
 
+A hosted version by Next Step Fusion is available at **https://viewer.nextfusion.org/**
+
 ## Features
 
 - Works offline as a Progressive Web App (PWA) — installable on desktop or mobile
