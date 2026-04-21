@@ -2125,14 +2125,33 @@ export function initApp() {
     let pendingErrorNode = null;
     const remoteFileUrl = new URLSearchParams(location.search).get("file");
     if (remoteFileUrl) {
-      const fileName =
-        remoteFileUrl.split("/").pop()?.split("?")[0] || "file.h5";
-      const fileKey = remoteFileUrl;
-      let didCache = false;
+      // Validate: must be a parseable https:// URL
+      let parsedRemoteUrl;
       try {
-        if (!(await hasFileInOpfs(fileKey))) {
+        parsedRemoteUrl = new URL(remoteFileUrl);
+      } catch {
+        parsedRemoteUrl = null;
+      }
+      if (!parsedRemoteUrl || parsedRemoteUrl.protocol !== "https:") {
+        history.replaceState(null, "", location.pathname);
+        // fall through to OPFS restoration
+      } else {
+        const fileName =
+          parsedRemoteUrl.pathname.split("/").pop()?.split("?")[0] || "file.h5";
+        let didCache = false;
+        let fileKey = null;
+        try {
+          // Confirm before issuing any network request
+          const confirmed = window.confirm(
+            `Load file from external URL?\n\n${parsedRemoteUrl.origin}${parsedRemoteUrl.pathname}\n\nOnly proceed if you trust this source.`,
+          );
+          if (!confirmed) {
+            history.replaceState(null, "", location.pathname);
+            return;
+          }
+
           treeView.setStatus("Fetching file…");
-          const response = await fetch(remoteFileUrl);
+          const response = await fetch(parsedRemoteUrl.href);
           if (!response.ok)
             throw new Error(`Server returned ${response.status}`);
           const blob = await response.blob();
@@ -2140,24 +2159,34 @@ export function initApp() {
           const HDF5_MAGIC = [0x89, 0x48, 0x44, 0x46, 0x0d, 0x0a, 0x1a, 0x0a];
           if (!HDF5_MAGIC.every((b, i) => header[i] === b))
             throw new Error("URL does not point to a valid HDF5 file.");
-          const file = new File([blob], fileName);
-          const cached = await cacheFileInOpfs(file, fileKey, fileName);
-          if (!cached) throw new Error("Could not save file to browser storage.");
-          didCache = true;
+
+          // Derive OPFS key from content hash, not the attacker-controlled URL
+          const hashBuffer = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+          const hashHex = Array.from(new Uint8Array(hashBuffer))
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+          fileKey = `remote:${hashHex}`;
+
+          if (!(await hasFileInOpfs(fileKey))) {
+            const file = new File([blob], fileName);
+            const cached = await cacheFileInOpfs(file, fileKey, fileName);
+            if (!cached) throw new Error("Could not save file to browser storage.");
+            didCache = true;
+          }
+          await restoreFileTreeForFileKey(fileKey, fileName);
+          // SUCCESS: skip OPFS restoration
+          return;
+        } catch (err) {
+          if (didCache && fileKey) {
+            await removeFileFromOpfs(fileKey);
+            removeRecentOpfsEntry(fileKey);
+          }
+          pendingErrorNode = { name: "Invalid URL" };
+        } finally {
+          history.replaceState(null, "", location.pathname);
         }
-        await restoreFileTreeForFileKey(fileKey, fileName);
-        // SUCCESS: skip OPFS restoration
-        return;
-      } catch (err) {
-        if (didCache) {
-          await removeFileFromOpfs(fileKey);
-          removeRecentOpfsEntry(fileKey);
-        }
-        pendingErrorNode = { name: "Invalid URL" };
-      } finally {
-        history.replaceState(null, "", location.pathname);
+        // ERROR: fall through to OPFS restoration below
       }
-      // ERROR: fall through to OPFS restoration below
     }
     // ─────────────────────────────────────────────────────────────────
 
