@@ -2823,6 +2823,45 @@ export function createDashboardView({
       entry?.updateTitle?.();
       entry?.renderPlot?.();
     },
+    addDashboardFromSchema(schema, { fileKey: fk, fileLabel: fl } = {}) {
+      const resolvedKey = fk ?? currentFileKey;
+      const resolvedLabel = fl ?? currentFileLabel;
+      if (!resolvedKey) return [];
+
+      const createdIds = [];
+      for (const dashDef of schema.dashboards ?? []) {
+        const dashboard = {
+          ...createDashboard(dashDef.name),
+          fileKey: resolvedKey,
+          fileLabel: resolvedLabel,
+          layout: { ...DEFAULT_DASHBOARD_LAYOUT, ...(dashDef.layout ?? {}) },
+        };
+        dashboards.push(dashboard);
+
+        for (const plotDef of dashDef.plots ?? []) {
+          const plot = {
+            ...createPlotConfig(),
+            xPath: plotDef.xPath ?? "",
+            yPath: plotDef.yPath ?? "",
+            additionalYPaths: plotDef.additionalYPaths ?? [],
+            yMode: plotDef.yMode ?? "1d",
+            sliceAxis: plotDef.sliceAxis ?? 0,
+            fileKey: resolvedKey,
+            fileLabel: resolvedLabel,
+            plotSettings: plotDef.title
+              ? { ...createDefaultPlotSettings(), title: plotDef.title }
+              : null,
+          };
+          plot.id = createId();
+          dashboard.plots.push(plot);
+        }
+        createdIds.push(dashboard.id);
+      }
+
+      persist();
+      renderDashboards();
+      return createdIds;
+    },
   };
 }
 

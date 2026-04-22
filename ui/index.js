@@ -1,4 +1,5 @@
 import { isNumericDtype, openFile } from "../data/index.js";
+import { detectSchema } from "../data/autoSchema.js";
 import {
   createDefaultPlotSettings,
   disposePlot,
@@ -1161,6 +1162,16 @@ export function initApp() {
     dataView.setAddToDashboardEnabled(true);
     dashboardView.setCurrentFileContext({ fileKey, fileLabel });
     dashboardView.updateDatalists();
+    const hasExistingDashboards = dashboardView.getDashboards().some((d) => d.fileKey === fileKey);
+    if (!hasExistingDashboards) {
+      const schema = await detectSchema(session, datasetIndex);
+      if (schema) {
+        const ids = dashboardView.addDashboardFromSchema(schema, { fileKey, fileLabel });
+        if (ids.length > 0) {
+          setPrimaryTab(ids[0]);
+        }
+      }
+    }
     resetSelectionState();
     renderFileSelector();
   }
