@@ -5,6 +5,32 @@ const HDF5_CDN_PRIMARY =
   "https://cdn.jsdelivr.net/npm/h5wasm@0.8.11/dist/iife/h5wasm.js";
 const HDF5_CDN_FALLBACK =
   "https://unpkg.com/h5wasm@0.8.11/dist/iife/h5wasm.js";
+// Pre-compiled HDF5 compression filter plugins (emscripten side modules).
+// h5wasm-plugins@0.2.x is ABI-matched to h5wasm 0.8.8+ (emscripten 3.1.68).
+const HDF5_PLUGINS_CDN_BASES = [
+  "https://cdn.jsdelivr.net/npm/h5wasm-plugins@0.2.1/plugins",
+  "https://unpkg.com/h5wasm-plugins@0.2.1/plugins",
+];
+const HDF5_DEFAULT_PLUGIN_PATH = "/usr/local/hdf5/lib/plugin";
+// Registered HDF5 filter ids covered by the h5wasm-plugins package.
+// https://github.com/HDFGroup/hdf5_registered_filter_plugins
+const HDF5_FILTER_PLUGIN_NAMES = new Map([
+  [307, "bz2"],
+  [32000, "lzf"],
+  [32001, "blosc"],
+  [32004, "lz4"],
+  [32008, "bshuf"],
+  [32013, "zfp"],
+  [32015, "zstd"],
+  [32019, "jpeg"],
+  [32022, "bitgroom"],
+  [32023, "bitround"],
+  [32026, "blosc2"],
+]);
+// Filters built into h5wasm's libhdf5 (deflate, shuffle, fletcher32, szip,
+// nbit, scaleoffset) that never need a plugin.
+const HDF5_BUILTIN_FILTER_IDS = new Set([1, 2, 3, 4, 5, 6]);
+const MAX_FILTER_SCAN_DEPTH = 64;
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024 * 1024;
 const DEFAULT_MAX_PREVIEW_POINTS = 100000;
 const DEFAULT_MAX_PREVIEW_ROWS = 1000;
@@ -144,6 +170,124 @@ async function resolveHdf5Runtime(hdf5Module, readyModule) {
   }
 
   return readyModule ?? hdf5Module;
+}
+
+const filterPluginInstalls = new Map();
+
+async function fetchFilterPlugin(fileName) {
+  let lastError;
+  for (const base of HDF5_PLUGINS_CDN_BASES) {
+    try {
+      const response = await fetch(`${base}/${fileName}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} fetching ${base}/${fileName}`);
+      }
+      return new Uint8Array(await response.arrayBuffer());
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error(`Failed to fetch HDF5 filter plugin ${fileName}.`);
+}
+
+function getPluginSearchPath(hdf5Runtime) {
+  if (typeof hdf5Runtime?.get_plugin_search_paths === "function") {
+    const paths = hdf5Runtime.get_plugin_search_paths();
+    if (paths?.length && typeof paths[0] === "string") {
+      return paths[0];
+    }
+  }
+  return HDF5_DEFAULT_PLUGIN_PATH;
+}
+
+function installFilterPlugin(hdf5Runtime, pluginName) {
+  let install = filterPluginInstalls.get(pluginName);
+  if (!install) {
+    install = (async () => {
+      const fileName = `libH5Z${pluginName}.so`;
+      const binary = await fetchFilterPlugin(fileName);
+      const pluginPath = getPluginSearchPath(hdf5Runtime);
+      const { FS } = hdf5Runtime;
+      if (typeof FS?.mkdirTree === "function") {
+        FS.mkdirTree(pluginPath);
+      }
+      FS.writeFile(`${pluginPath}/${fileName}`, binary);
+    })();
+    // Allow a retry on the next file open if the CDN fetch fails.
+    install.catch(() => filterPluginInstalls.delete(pluginName));
+    filterPluginInstalls.set(pluginName, install);
+  }
+  return install;
+}
+
+function collectPluginFilterIds(node, groupCtor, datasetCtor, ids, depth = 0) {
+  if (depth > MAX_FILTER_SCAN_DEPTH) {
+    return ids;
+  }
+
+  const type = getNodeType(node, groupCtor, datasetCtor);
+  if (type === "dataset") {
+    let filters;
+    try {
+      filters = node.filters;
+    } catch (error) {
+      return ids;
+    }
+    for (const filter of filters ?? []) {
+      const id = Number(filter?.id);
+      if (Number.isFinite(id) && !HDF5_BUILTIN_FILTER_IDS.has(id)) {
+        ids.add(id);
+      }
+    }
+    return ids;
+  }
+
+  if (type !== "group" || typeof node?.keys !== "function") {
+    return ids;
+  }
+  for (const name of node.keys()) {
+    let child;
+    try {
+      child = node.get(name);
+    } catch (error) {
+      continue;
+    }
+    collectPluginFilterIds(child, groupCtor, datasetCtor, ids, depth + 1);
+  }
+  return ids;
+}
+
+async function installFilterPluginsForFile(hdf5Runtime, h5File, groupCtor, datasetCtor) {
+  let filterIds;
+  try {
+    filterIds = collectPluginFilterIds(h5File, groupCtor, datasetCtor, new Set());
+  } catch (error) {
+    console.warn(
+      "Failed to scan HDF5 datasets for compression filters; compressed data may not decode.",
+      error,
+    );
+    return;
+  }
+
+  const installs = [];
+  for (const id of filterIds) {
+    const pluginName = HDF5_FILTER_PLUGIN_NAMES.get(id);
+    if (!pluginName) {
+      console.warn(
+        `HDF5 filter ${id} has no available decoder plugin; datasets using it will not decode correctly.`,
+      );
+      continue;
+    }
+    installs.push(
+      installFilterPlugin(hdf5Runtime, pluginName).catch((error) => {
+        console.warn(
+          `Failed to install HDF5 filter plugin "${pluginName}"; datasets using it will not decode correctly.`,
+          error,
+        );
+      }),
+    );
+  }
+  await Promise.all(installs);
 }
 
 async function readFileInput(fileOrHandle) {
@@ -1450,6 +1594,13 @@ export async function openFile(fileOrHandle, options = {}) {
 
   const h5File = new H5File(virtualName, "r");
   const metadataOnly = accessMode === "metadata";
+
+  if (!metadataOnly) {
+    // Third-party compression filters (e.g. h5py's LZF) need their decoder
+    // plugin installed before the first data read; otherwise HDF5 leaves the
+    // affected chunks zero-filled in the output buffer.
+    await installFilterPluginsForFile(hdf5Runtime, h5File, Group, Dataset);
+  }
 
   function assertDataAccess() {
     if (metadataOnly) {
